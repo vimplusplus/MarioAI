@@ -1,15 +1,17 @@
 name: Daily Pull-Shark PR
 
 on:
+  # 06:15 AWST every day (22:15 UTC)
   schedule:
-    - cron: "15 22 * * *"      # 06:15 AWST daily
+    - cron: "15 22 * * *"
+
   workflow_dispatch:
     inputs:
       run_reason:
-        description: "Note for commit / PR title"
+        description: "Free-text note for commit / PR title"
         default: ""
       branch_suffix:
-        description: "Branch suffix (blank = YYYYMMDD)"
+        description: "Optional branch suffix (blank = YYYYMMDD)"
         default: ""
 
 permissions:
@@ -26,74 +28,82 @@ jobs:
       CO_EMAIL_1:    "devturtlestack@gmail.com"
       CO_NAME_2:     "github-actions[bot]"
       CO_EMAIL_2:    "41898282+github-actions[bot]@users.noreply.github.com"
+      CO_NAME_3:     "Rhys Lewis"
+      CO_EMAIL_3:    "rhysjohnlewis@gmail.com"
 
     steps:
-    # 1 — checkout default branch (main)
-    - uses: actions/checkout@v4
+      # 1 – checkout
+      - uses: actions/checkout@v4
 
-    # 2 — set author identity (Rhys)
-    - name: Configure Git user
-      run: |
-        git config --global user.name  "${PRIMARY_NAME}"
-        git config --global user.email "${PRIMARY_EMAIL}"
+      # 2 – primary author = Rhys
+      - name: Configure Git user
+        run: |
+          git config --global user.name  "${PRIMARY_NAME}"
+          git config --global user.email "${PRIMARY_EMAIL}"
 
-    # 3 — derive branch & reason
-    - name: Compute branch metadata
-      id: vars
-      run: |
-        DATE=$(date +%Y%m%d)
-        SUFFIX="${{ github.event.inputs.branch_suffix }}"
-        [[ -z "$SUFFIX" ]] && SUFFIX="$DATE"
-        REASON="${{ github.event.inputs.run_reason || 'scheduled-run' }}"
-        echo "branch=auto/readme-bump-${SUFFIX}"   >>"$GITHUB_OUTPUT"
-        echo "reason=${REASON}"                    >>"$GITHUB_OUTPUT"
+      # 3 – branch & reason
+      - name: Compute branch metadata
+        id: vars
+        env:
+          BRANCH_SUFFIX: ${{ github.event.inputs.branch_suffix }}
+          RUN_REASON:    ${{ github.event.inputs.run_reason }}
+        run: |
+          DATE=$(date +%Y%m%d)
+          SUFFIX="${BRANCH_SUFFIX:-$DATE}"
+          REASON="${RUN_REASON:-scheduled-run}"
+          echo "branch=auto/readme-bump-${SUFFIX}" >>"$GITHUB_OUTPUT"
+          echo "reason=${REASON}"                  >>"$GITHUB_OUTPUT"
 
-    # 4 — edit README, commit with trailers, push branch
-    - name: Update README and push branch
-      run: |
-        set -e
-        git switch -C "${{ steps.vars.outputs.branch }}"
-        printf "\n\n_Last automated touch: %s  (%s)_" \
-               "$(date -u)" "${{ steps.vars.outputs.reason }}" >>README.md
-        git add README.md
+      # 4 – edit README, commit (with 2 trailers), push
+      - name: Update README and push branch
+        run: |
+          set -e
+          git fetch origin
+          git switch -C "${{ steps.vars.outputs.branch }}"
 
-        git commit -m $'chore: README timestamp – '"${{ steps.vars.outputs.reason }}"$'\n\nCo-authored-by: '"${CO_NAME_1}"' <'"${CO_EMAIL_1}"'>\nCo-authored-by: '"${CO_NAME_2}"' <'"${CO_EMAIL_2}"'>'
+          printf "\n\n_Last automated touch: %s  (%s)_" \
+                 "$(date -u)" "${{ steps.vars.outputs.reason }}" >>README.md
+          git add README.md
 
-        git push --force-with-lease -u origin "${{ steps.vars.outputs.branch }}"
+          git commit -m $'chore: README timestamp – '"${{ steps.vars.outputs.reason }}"$'\n\nCo-authored-by: '"${CO_NAME_1}"' <'"${CO_EMAIL_1}"'>\nCo-authored-by: '"${CO_NAME_2}"' <'"${CO_EMAIL_2}"'>'
 
-    # 5 — ensure label exists
-    - name: Ensure label
-      env: { GH_TOKEN: ${{ secrets.GITHUB_TOKEN }} }
-      run: |
-        gh label list | grep -q '^auto-pr' || \
-        gh label create auto-pr --color EEEEEE --description "Automated PRs"
+          git push --force-with-lease -u origin "${{ steps.vars.outputs.branch }}"
 
-    # 6 — open (or reuse) pull request
-    - name: Create or reuse PR
-      id: pr
-      env: { GH_TOKEN: ${{ secrets.GITHUB_TOKEN }} }
-      run: |
-        set -e
-        # Reuse PR if branch already has one in open state
-        PR_NUM=$(gh pr list --state open --head "${{ steps.vars.outputs.branch }}" --json number -q '.[0].number')
-        if [[ -z "$PR_NUM" ]]; then
-          PR_URL=$(gh pr create \
-              --title "🤖 README refresh – ${{ steps.vars.outputs.reason }}" \
-              --body  "Automated PR for Pull-Shark / Pair badges." \
-              --head  "${{ steps.vars.outputs.branch }}" \
-              --base  main \
-              --label auto-pr \
+      # 5 – ensure label exists
+      - name: Ensure auto-pr label
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh label list | grep -q '^auto-pr' || \
+          gh label create auto-pr --color EEEEEE --description "Automated PRs"
+
+      # 6 – create (or reuse) pull request
+      - name: Create or reuse PR
+        id: pr
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -e
+          PR_NUM=$(gh pr list --state open --head "${{ steps.vars.outputs.branch }}" \
+                   --json number -q '.[0].number')
+          if [ -z "$PR_NUM" ]; then
+            PR_URL=$(gh pr create \
+              --title   "🤖 README refresh – ${{ steps.vars.outputs.reason }}" \
+              --body    "Automated PR for badge farming." \
+              --head    "${{ steps.vars.outputs.branch }}" \
+              --base    main \
+              --label   auto-pr \
               --json url -q .url)
-        else
-          PR_URL=$(gh pr view "$PR_NUM" --json url -q .url)
-        fi
-        echo "pr_url=$PR_URL" >>"$GITHUB_OUTPUT"
-        echo "PR = $PR_URL"
+          else
+            PR_URL=$(gh pr view "$PR_NUM" --json url -q .url)
+          fi
+          echo "pr_url=$PR_URL" >>"$GITHUB_OUTPUT"
+          echo "PR URL: $PR_URL"
 
-    # 7 — merge PR & delete branch
-    - name: Merge PR
-      env: { GH_TOKEN: ${{ secrets.GITHUB_TOKEN }} }
-      run: |
-        set -e
-        gh pr merge "${{ steps.pr.outputs.pr_url }}" \
-          --merge --delete-branch --admin
+      # 7 – merge & delete branch
+      - name: Merge PR and clean up
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh pr merge "${{ steps.pr.outputs.pr_url }}" \
+            --merge --delete-branch --admin
