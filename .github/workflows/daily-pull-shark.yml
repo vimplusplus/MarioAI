@@ -1,11 +1,9 @@
 name: Daily Pull-Shark PR
 
 on:
-  # ── scheduled run every day at 06:15 AWST (22:15 UTC) ──
+  # 06:15 AWST every day (22:15 UTC)
   schedule:
     - cron: "15 22 * * *"
-
-  # ── manual trigger from the GitHub UI or CLI ──
   workflow_dispatch:
     inputs:
       run_reason:
@@ -26,17 +24,14 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-    # 1) check out your default branch
-    - name: Checkout default branch
-      uses: actions/checkout@v4
+    - uses: actions/checkout@v4
 
-    # 2) set bot identity
     - name: Set up Git user
       run: |
         git config --global user.name  "🦈 Pull-Shark Bot"
         git config --global user.email "actions@users.noreply.github.com"
 
-    # 3) work out branch name + reason (PATCHED)
+    # -------- patched variable step --------
     - name: Determine branch name
       id: vars
       env:
@@ -46,11 +41,10 @@ jobs:
         DATE_TAG=$(date +%Y%m%d)
         SUFFIX=${BRANCH_SUFFIX:-$DATE_TAG}
         REASON=${RUN_REASON:-scheduled-run}
-
         echo "branch=auto/readme-bump-${SUFFIX}" >> "$GITHUB_OUTPUT"
         echo "reason=${REASON}"                  >> "$GITHUB_OUTPUT"
+    # ---------------------------------------
 
-    # 4) create feature branch, tweak README, push
     - name: Create feature branch and tweak README
       run: |
         git switch -c "${{ steps.vars.outputs.branch }}"
@@ -60,11 +54,13 @@ jobs:
         git commit -m "chore: README timestamp – ${{ steps.vars.outputs.reason }}"
         git push -u origin "${{ steps.vars.outputs.branch }}"
 
-    # 5) install GitHub CLI (gh)
-    - name: Install GitHub CLI
-      uses: cli/cli@v2
+    # --- correct wrapper for gh CLI ---
+    - name: Setup GitHub CLI
+      uses: cli/cli-action@v2         # ← this is the valid slug
+      with:
+        version: latest
+    # ----------------------------------
 
-    # 6) open the pull request
     - name: Open pull request
       env:
         GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -76,7 +72,6 @@ jobs:
           --base  ${{ github.ref_name }} \
           --label "auto-pr"
 
-    # 7) merge it, squash style, and delete the branch
     - name: Merge PR & delete branch
       env:
         GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
