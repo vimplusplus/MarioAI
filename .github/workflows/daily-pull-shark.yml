@@ -11,7 +11,7 @@ on:
       run_reason:
         description: "Why are you running this?"
         required: false
-        default: "manual-kick"
+        default: ""
       branch_suffix:
         description: "Custom suffix for the feature branch"
         required: false
@@ -26,17 +26,65 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
+    # 1) check out your default branch
     - name: Checkout default branch
       uses: actions/checkout@v4
 
+    # 2) set bot identity
     - name: Set up Git user
       run: |
         git config --global user.name  "🦈 Pull-Shark Bot"
         git config --global user.email "actions@users.noreply.github.com"
 
+    # 3) work out branch name + reason (PATCHED)
     - name: Determine branch name
       id: vars
+      env:
+        BRANCH_SUFFIX: ${{ github.event.inputs.branch_suffix }}
+        RUN_REASON:    ${{ github.event.inputs.run_reason }}
       run: |
         DATE_TAG=$(date +%Y%m%d)
-        # If the manual run supplied a branch_suffix, use it; otherwise fall back to the date
-        SU
+        SUFFIX=${BRANCH_SUFFIX:-$DATE_TAG}
+        REASON=${RUN_REASON:-scheduled-run}
+
+        echo "branch=auto/readme-bump-${SUFFIX}" >> "$GITHUB_OUTPUT"
+        echo "reason=${REASON}"                  >> "$GITHUB_OUTPUT"
+
+    # 4) create feature branch, tweak README, push
+    - name: Create feature branch and tweak README
+      run: |
+        git switch -c "${{ steps.vars.outputs.branch }}"
+        echo -e "\n\n_Last automated touch: $(date -u)  (${{
+          steps.vars.outputs.reason }})_" >> README.md
+        git add README.md
+        git commit -m "chore: README timestamp – ${{ steps.vars.outputs.reason }}"
+        git push -u origin "${{ steps.vars.outputs.branch }}"
+
+    # 5) install GitHub CLI (gh)
+    - name: Install GitHub CLI
+      uses: cli/cli@v2
+
+    # 6) open the pull request
+    - name: Open pull request
+      env:
+        GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      run: |
+        gh pr create \
+          --title "🤖 README refresh – ${{ steps.vars.outputs.reason }}" \
+          --body  "Automated PR created by the Pull-Shark bot." \
+          --head  "${{ steps.vars.outputs.branch }}" \
+          --base  ${{ github.ref_name }} \
+          --label "auto-pr"
+
+    # 7) merge it, squash style, and delete the branch
+    - name: Merge PR & delete branch
+      env:
+        GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      run: |
+        PR_NUMBER=$(gh pr list --state open --head "${{ steps.vars.outputs.branch }}" \
+                    --json number -q '.[0].number')
+        gh pr merge "$PR_NUMBER" \
+            --squash \
+            --subject "chore: daily README bump" \
+            --delete-branch \
+            --admin
