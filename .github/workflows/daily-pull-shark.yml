@@ -28,11 +28,12 @@ jobs:
     # 1 – checkout
     - uses: actions/checkout@v4
 
-    # 2 – bot identity
+    # 2 – commit as *your* account, not the generic Actions user
     - name: Configure Git user
       run: |
-        git config --global user.name  "🦈 Pull-Shark Bot"
-        git config --global user.email "actions@users.noreply.github.com"
+        git config --global user.name  "${GITHUB_ACTOR}"
+        git config --global user.email "${GITHUB_ACTOR}@users.noreply.github.com"
+
 
     # 3 – decide branch + reason
     - name: Compute branch metadata
