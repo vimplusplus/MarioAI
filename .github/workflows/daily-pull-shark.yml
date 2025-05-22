@@ -5,14 +5,15 @@ on:
   schedule:
     - cron: "15 22 * * *"
 
+  # Manual trigger
   workflow_dispatch:
     inputs:
       run_reason:
-        description: "Text to show in commit / PR"
+        description: "Free-text note for the commit / PR title"
         required: false
         default: ""
       branch_suffix:
-        description: "Custom branch suffix (blank = YYYYMMDD)"
+        description: "Custom suffix for the feature branch (blank = YYYYMMDD)"
         required: false
         default: ""
 
@@ -25,17 +26,16 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-    # 1 – checkout
+    # 1 – check out repo
     - uses: actions/checkout@v4
 
-    # 2 – commit as *your* account, not the generic Actions user
+    # 2 – set commit identity
     - name: Configure Git user
       run: |
-        git config --global user.name  "${GITHUB_ACTOR}"
-        git config --global user.email "${GITHUB_ACTOR}@users.noreply.github.com"
+        git config --global user.name  "🦈 Pull-Shark Bot"
+        git config --global user.email "actions@users.noreply.github.com"
 
-
-    # 3 – decide branch + reason
+    # 3 – compute branch + reason strings
     - name: Compute branch metadata
       id: vars
       env:
@@ -46,7 +46,7 @@ jobs:
         echo "branch=auto/readme-bump-${BRANCH_SUFFIX:-$DATE_TAG}" >>"$GITHUB_OUTPUT"
         echo "reason=${RUN_REASON:-scheduled-run}"                 >>"$GITHUB_OUTPUT"
 
-    # 4 – update README, commit with co-author, push
+    # 4 – update README, commit with trailers, push
     - name: Update README and push branch
       run: |
         git fetch origin
@@ -56,11 +56,13 @@ jobs:
                "$(date -u)" "${{ steps.vars.outputs.reason }}" >>README.md
         git add README.md
 
+        # --- commit message exactly per GitHub docs ---
         git commit -m $'chore: README timestamp – '"${{ steps.vars.outputs.reason }}"$'\n\nCo-authored-by: github-actions[bot] <41898282+github-actions[bot]@users.noreply.github.com>'
+        # ----------------------------------------------
 
         git push --force-with-lease -u origin "${{ steps.vars.outputs.branch }}"
 
-    # 5 – ensure label exists
+    # 5 – ensure label exists (first run only)
     - name: Ensure auto-pr label exists
       env:
         GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -68,7 +70,7 @@ jobs:
         gh label list | grep -q '^auto-pr' || \
         gh label create auto-pr --color EEEEEE --description "Automated PRs"
 
-    # 6 – open the PR
+    # 6 – open the pull request
     - name: Create pull request
       env:
         GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -80,7 +82,7 @@ jobs:
           --base  ${{ github.ref_name }} \
           --label "auto-pr"
 
-    # 7 – merge & delete branch
+    # 7 – merge (keeps commit) & delete branch
     - name: Merge PR and clean up
       env:
         GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
