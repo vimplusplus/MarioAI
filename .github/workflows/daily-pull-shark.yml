@@ -1,9 +1,8 @@
 name: Daily Pull-Shark PR
 
 on:
-  schedule:              # 06 :15 AWST daily (22 :15 UTC)
+  schedule:                # 06 :15 AWST daily  (22 :15 UTC)
     - cron: "15 22 * * *"
-
   workflow_dispatch:
     inputs:
       run_reason:
@@ -21,24 +20,24 @@ jobs:
   daily-pr:
     runs-on: ubuntu-latest
     env:
-      PRIMARY_NAME:  "Rhys Lewis"
-      PRIMARY_EMAIL: "rhysjohnlewis@gmail.com"
-      CO_NAME_1:     "Dev Turtlestack"
-      CO_EMAIL_1:    "devturtlestack@gmail.com"
-      CO_NAME_2:     "github-actions[bot]"
-      CO_EMAIL_2:    "41898282+github-actions[bot]@users.noreply.github.com"
+      # ──  PRIMARY = Dev Turtlestack  ──────────────────────────────
+      PRIMARY_NAME:  "Dev Turtlestack"
+      PRIMARY_EMAIL: "devturtlestack@gmail.com"
+      # ──  CO-AUTHOR = Rhys Lewis  ────────────────────────────────
+      CO_NAME:       "Rhys Lewis"
+      CO_EMAIL:      "rhysjohnlewis@gmail.com"
 
     steps:
-      # 1 – checkout
+      # 1  checkout default branch
       - uses: actions/checkout@v4
 
-      # 2 – primary author
-      - name: Configure Git user
+      # 2  masquerade as Dev Turtlestack
+      - name: Configure Git user (Dev)
         run: |
           git config --global user.name  "${PRIMARY_NAME}"
           git config --global user.email "${PRIMARY_EMAIL}"
 
-      # 3 – branch + reason
+      # 3  decide branch + reason
       - name: Compute branch metadata
         id: vars
         env:
@@ -46,13 +45,11 @@ jobs:
           RUN_REASON:    ${{ github.event.inputs.run_reason }}
         run: |
           DATE=$(date +%Y%m%d)
-          SUFFIX="${BRANCH_SUFFIX:-$DATE}"
-          REASON="${RUN_REASON:-scheduled-run}"
-          echo "branch=auto/readme-bump-${SUFFIX}" >>"$GITHUB_OUTPUT"
-          echo "reason=${REASON}"                  >>"$GITHUB_OUTPUT"
+          echo "branch=auto/dev-readme-bump-${BRANCH_SUFFIX:-$DATE}" >>"$GITHUB_OUTPUT"
+          echo "reason=${RUN_REASON:-scheduled-run}"                  >>"$GITHUB_OUTPUT"
 
-      # 4 – edit README, commit w/ trailers, push
-      - name: Update README and push branch
+      # 4  tweak README, commit (primary = Dev, trailer = Rhys), push
+      - name: Add commit with Rhys as co-author
         run: |
           set -e
           git fetch origin
@@ -62,11 +59,11 @@ jobs:
                  "$(date -u)" "${{ steps.vars.outputs.reason }}" >>README.md
           git add README.md
 
-          git commit -m $'chore: README timestamp – '"${{ steps.vars.outputs.reason }}"$'\n\nCo-authored-by: '"${CO_NAME_1}"' <'"${CO_EMAIL_1}"'>\nCo-authored-by: '"${CO_NAME_2}"' <'"${CO_EMAIL_2}"'>'
+          git commit -m $'chore: README timestamp – '"${{ steps.vars.outputs.reason }}"$'\n\nCo-authored-by: '"${CO_NAME}"' <'"${CO_EMAIL}"'>'
 
           git push --force-with-lease -u origin "${{ steps.vars.outputs.branch }}"
 
-      # 5 – ensure label exists
+      # 5  ensure the PR label exists
       - name: Ensure auto-pr label
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -74,7 +71,7 @@ jobs:
           gh label list | grep -q '^auto-pr' || \
           gh label create auto-pr --color EEEEEE --description "Automated PRs"
 
-      # 6 – create (or reuse) PR and capture URL
+      # 6  open (or reuse) a pull request
       - name: Create or reuse PR
         id: pr
         env:
@@ -82,11 +79,11 @@ jobs:
         run: |
           set -e
           PR_NUM=$(gh pr list --state open --head "${{ steps.vars.outputs.branch }}" \
-                     --json number -q '.[0].number')
+                   --json number -q '.[0].number')
           if [ -z "$PR_NUM" ]; then
             gh pr create \
               --title  "🤖 README refresh – ${{ steps.vars.outputs.reason }}" \
-              --body   "Automated PR for badge farming." \
+              --body   "Automated PR by Dev Turtlestack (co-author Rhys Lewis)." \
               --head   "${{ steps.vars.outputs.branch }}" \
               --base   main \
               --label  auto-pr
@@ -97,7 +94,7 @@ jobs:
           echo "pr_url=$PR_URL" >>"$GITHUB_OUTPUT"
           echo "PR URL: $PR_URL"
 
-      # 7 – merge & delete branch
+      # 7  merge PR, delete branch
       - name: Merge PR and clean up
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
