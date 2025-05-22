@@ -1,17 +1,16 @@
 name: Daily Pull-Shark PR
 
 on:
-  # 06:15 AWST every day (22:15 UTC)
-  schedule:
+  schedule:              # 06 :15 AWST daily (22 :15 UTC)
     - cron: "15 22 * * *"
 
   workflow_dispatch:
     inputs:
       run_reason:
-        description: "Free-text note for commit / PR title"
+        description: "Note for commit / PR title"
         default: ""
       branch_suffix:
-        description: "Optional branch suffix (blank = YYYYMMDD)"
+        description: "Branch suffix (blank = YYYYMMDD)"
         default: ""
 
 permissions:
@@ -28,20 +27,18 @@ jobs:
       CO_EMAIL_1:    "devturtlestack@gmail.com"
       CO_NAME_2:     "github-actions[bot]"
       CO_EMAIL_2:    "41898282+github-actions[bot]@users.noreply.github.com"
-      CO_NAME_3:     "Rhys Lewis"
-      CO_EMAIL_3:    "rhysjohnlewis@gmail.com"
 
     steps:
       # 1 – checkout
       - uses: actions/checkout@v4
 
-      # 2 – primary author = Rhys
+      # 2 – primary author
       - name: Configure Git user
         run: |
           git config --global user.name  "${PRIMARY_NAME}"
           git config --global user.email "${PRIMARY_EMAIL}"
 
-      # 3 – branch & reason
+      # 3 – branch + reason
       - name: Compute branch metadata
         id: vars
         env:
@@ -54,7 +51,7 @@ jobs:
           echo "branch=auto/readme-bump-${SUFFIX}" >>"$GITHUB_OUTPUT"
           echo "reason=${REASON}"                  >>"$GITHUB_OUTPUT"
 
-      # 4 – edit README, commit (with 2 trailers), push
+      # 4 – edit README, commit w/ trailers, push
       - name: Update README and push branch
         run: |
           set -e
@@ -77,7 +74,7 @@ jobs:
           gh label list | grep -q '^auto-pr' || \
           gh label create auto-pr --color EEEEEE --description "Automated PRs"
 
-      # 6 – create (or reuse) pull request
+      # 6 – create (or reuse) PR and capture URL
       - name: Create or reuse PR
         id: pr
         env:
@@ -85,18 +82,18 @@ jobs:
         run: |
           set -e
           PR_NUM=$(gh pr list --state open --head "${{ steps.vars.outputs.branch }}" \
-                   --json number -q '.[0].number')
+                     --json number -q '.[0].number')
           if [ -z "$PR_NUM" ]; then
-            PR_URL=$(gh pr create \
-              --title   "🤖 README refresh – ${{ steps.vars.outputs.reason }}" \
-              --body    "Automated PR for badge farming." \
-              --head    "${{ steps.vars.outputs.branch }}" \
-              --base    main \
-              --label   auto-pr \
-              --json url -q .url)
-          else
-            PR_URL=$(gh pr view "$PR_NUM" --json url -q .url)
+            gh pr create \
+              --title  "🤖 README refresh – ${{ steps.vars.outputs.reason }}" \
+              --body   "Automated PR for badge farming." \
+              --head   "${{ steps.vars.outputs.branch }}" \
+              --base   main \
+              --label  auto-pr
+            PR_NUM=$(gh pr list --state open --head "${{ steps.vars.outputs.branch }}" \
+                       --json number -q '.[0].number')
           fi
+          PR_URL=$(gh pr view "$PR_NUM" --json url -q .url)
           echo "pr_url=$PR_URL" >>"$GITHUB_OUTPUT"
           echo "PR URL: $PR_URL"
 
