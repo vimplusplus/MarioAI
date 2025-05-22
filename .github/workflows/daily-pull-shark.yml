@@ -1,7 +1,7 @@
 name: Daily Pull-Shark PR
 
 on:
-  # 06:15 AWST every day (22:15 UTC)
+  # 06:15 AWST every day  (22:15 UTC the previous day)
   schedule:
     - cron: "15 22 * * *"
 
@@ -18,8 +18,8 @@ on:
         default: ""
 
 permissions:
-  contents: write
-  pull-requests: write
+  contents: write          # push / commit
+  pull-requests: write     # open + merge PRs
 
 jobs:
   daily-pr:
@@ -29,11 +29,11 @@ jobs:
     # 1 – check out repo
     - uses: actions/checkout@v4
 
-    # 2 – set commit identity
+    # 2 – set commit identity  (PRIMARY AUTHOR = YOU)
     - name: Configure Git user
       run: |
-        git config --global user.name  "🦈 Pull-Shark Bot"
-        git config --global user.email "actions@users.noreply.github.com"
+        git config --global user.name  "Rhys Lewis"
+        git config --global user.email "rhysjohnlewis@gmail.com"
 
     # 3 – compute branch + reason strings
     - name: Compute branch metadata
@@ -46,7 +46,7 @@ jobs:
         echo "branch=auto/readme-bump-${BRANCH_SUFFIX:-$DATE_TAG}" >>"$GITHUB_OUTPUT"
         echo "reason=${RUN_REASON:-scheduled-run}"                 >>"$GITHUB_OUTPUT"
 
-    # 4 – update README, commit with trailers, push
+    # 4 – update README, commit with two co-author trailers, push
     - name: Update README and push branch
       run: |
         git fetch origin
@@ -56,9 +56,7 @@ jobs:
                "$(date -u)" "${{ steps.vars.outputs.reason }}" >>README.md
         git add README.md
 
-        # --- commit message exactly per GitHub docs ---
-        git commit -m $'chore: README timestamp – '"${{ steps.vars.outputs.reason }}"$'\n\nCo-authored-by: github-actions[bot] <41898282+github-actions[bot]@users.noreply.github.com>'
-        # ----------------------------------------------
+        git commit -m $'chore: README timestamp – '"${{ steps.vars.outputs.reason }}"$'\n\nCo-authored-by: Dev Turtlestack <devturtlestack@gmail.com>\nCo-authored-by: github-actions[bot] <41898282+github-actions[bot]@users.noreply.github.com>'
 
         git push --force-with-lease -u origin "${{ steps.vars.outputs.branch }}"
 
