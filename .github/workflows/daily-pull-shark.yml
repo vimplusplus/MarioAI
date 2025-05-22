@@ -1,0 +1,42 @@
+name: Daily Pull-Shark PR
+
+on:
+  # ── scheduled run every day at 06:15 AWST (22:15 UTC) ──
+  schedule:
+    - cron: "15 22 * * *"
+
+  # ── manual trigger from the GitHub UI or CLI ──
+  workflow_dispatch:
+    inputs:
+      run_reason:
+        description: "Why are you running this?"
+        required: false
+        default: "manual-kick"
+      branch_suffix:
+        description: "Custom suffix for the feature branch"
+        required: false
+        default: ""
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  daily-pr:
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout default branch
+      uses: actions/checkout@v4
+
+    - name: Set up Git user
+      run: |
+        git config --global user.name  "🦈 Pull-Shark Bot"
+        git config --global user.email "actions@users.noreply.github.com"
+
+    - name: Determine branch name
+      id: vars
+      run: |
+        DATE_TAG=$(date +%Y%m%d)
+        # If the manual run supplied a branch_suffix, use it; otherwise fall back to the date
+        SU
