@@ -1,11 +1,10 @@
 name: Daily Pull-Shark PR
 
 on:
-  # 06:15 AWST every day (22:15 UTC the previous day)
+  # 06:15 AWST every day (22:15 UTC)
   schedule:
     - cron: "15 22 * * *"
 
-  # Manual “Run workflow” button
   workflow_dispatch:
     inputs:
       run_reason:
@@ -18,8 +17,8 @@ on:
         default: ""
 
 permissions:
-  contents: write        # push / commit
-  pull-requests: write   # open + merge PRs
+  contents: write
+  pull-requests: write
 
 jobs:
   daily-pr:
@@ -29,13 +28,13 @@ jobs:
     # 1 – checkout
     - uses: actions/checkout@v4
 
-    # 2 – bot identity for the commits
+    # 2 – bot identity
     - name: Configure Git user
       run: |
         git config --global user.name  "🦈 Pull-Shark Bot"
         git config --global user.email "actions@users.noreply.github.com"
 
-    # 3 – decide branch slug + reason text
+    # 3 – decide branch + reason
     - name: Compute branch metadata
       id: vars
       env:
@@ -46,32 +45,32 @@ jobs:
         echo "branch=auto/readme-bump-${BRANCH_SUFFIX:-$DATE_TAG}" >>"$GITHUB_OUTPUT"
         echo "reason=${RUN_REASON:-scheduled-run}"                 >>"$GITHUB_OUTPUT"
 
-    # 4 – create / update branch, tweak README, commit with co-author trailer
+    # 4 – update README, commit with co-author, push
     - name: Update README and push branch
       run: |
         git fetch origin
         git switch -C "${{ steps.vars.outputs.branch }}"
 
         printf "\n\n_Last automated touch: %s  (%s)_" \
-               "$(date -u)"  "${{ steps.vars.outputs.reason }}" >>README.md
+               "$(date -u)" "${{ steps.vars.outputs.reason }}" >>README.md
         git add README.md
 
-        # Commit message with required blank line, then the trailer
         git commit -m $'chore: README timestamp – '"${{ steps.vars.outputs.reason }}"$'\n\nCo-authored-by: github-actions[bot] <41898282+github-actions[bot]@users.noreply.github.com>'
 
-        # Overwrite any stale branch from a previous run
         git push --force-with-lease -u origin "${{ steps.vars.outputs.branch }}"
 
-    # 5 – ensure label exists (runs only once, then fast)
-    - name: Ensure “auto-pr” label exists
-      env: { GH_TOKEN: ${{ secrets.GITHUB_TOKEN }} }
+    # 5 – ensure label exists
+    - name: Ensure auto-pr label exists
+      env:
+        GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       run: |
         gh label list | grep -q '^auto-pr' || \
         gh label create auto-pr --color EEEEEE --description "Automated PRs"
 
     # 6 – open the PR
     - name: Create pull request
-      env: { GH_TOKEN: ${{ secrets.GITHUB_TOKEN }} }
+      env:
+        GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       run: |
         gh pr create \
           --title "🤖 README refresh – ${{ steps.vars.outputs.reason }}" \
@@ -80,11 +79,11 @@ jobs:
           --base  ${{ github.ref_name }} \
           --label "auto-pr"
 
-    # 7 – merge (keep original commit) & delete branch
+    # 7 – merge & delete branch
     - name: Merge PR and clean up
-      env: { GH_TOKEN: ${{ secrets.GITHUB_TOKEN }} }
+      env:
+        GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       run: |
         PR=$(gh pr list --state open --head "${{ steps.vars.outputs.branch }}" \
                --json number -q '.[0].number')
-        # --merge keeps the commit (and its trailer) intact
         gh pr merge "$PR" --merge --delete-branch --admin
