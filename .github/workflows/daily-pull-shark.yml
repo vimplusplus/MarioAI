@@ -1,83 +1,97 @@
 name: Daily Pull-Shark PR
 
 on:
-  schedule:        # 06:15 AWST every day (22:15 UTC)
+  # ── 06 :15 AWST every day (22 :15 UTC) ──
+  schedule:
     - cron: "15 22 * * *"
+
+  # ── manual “Run workflow” button / gh workflow run ──
   workflow_dispatch:
     inputs:
       run_reason:
-        description: "Why are you running this?"
+        description: "Reason shown in commit / PR title"
         required: false
         default: ""
       branch_suffix:
-        description: "Custom suffix for the feature branch"
+        description: "Optional custom suffix for the feature branch"
         required: false
         default: ""
 
 permissions:
-  contents: write
-  pull-requests: write
+  contents: write        # push, branch, commit
+  pull-requests: write   # open + merge PR
 
 jobs:
   daily-pr:
     runs-on: ubuntu-latest
 
     steps:
+    # 1. check out default branch
     - uses: actions/checkout@v4
 
-    - name: Set up Git user
+    # 2. bot identity
+    - name: Configure Git user
       run: |
         git config --global user.name  "🦈 Pull-Shark Bot"
         git config --global user.email "actions@users.noreply.github.com"
 
-    - name: Determine branch name
+    # 3. decide branch name + reason
+    - name: Determine branch metadata
       id: vars
       env:
         BRANCH_SUFFIX: ${{ github.event.inputs.branch_suffix }}
         RUN_REASON:    ${{ github.event.inputs.run_reason }}
       run: |
-        DATE_TAG=$(date +%Y%m%d)
-        SUFFIX=${BRANCH_SUFFIX:-$DATE_TAG}
+        DATE=$(date +%Y%m%d)
+        SUFFIX=${BRANCH_SUFFIX:-$DATE}
         REASON=${RUN_REASON:-scheduled-run}
+
         echo "branch=auto/readme-bump-${SUFFIX}" >> "$GITHUB_OUTPUT"
         echo "reason=${REASON}"                  >> "$GITHUB_OUTPUT"
 
-    - name: Create feature branch and tweak README
+    # 4. create / update branch, touch README, push
+    - name: Create feature branch and update README
       run: |
-        git switch -c "${{ steps.vars.outputs.branch }}"
-        echo -e "\n\n_Last automated touch: $(date -u)  (${{
-          steps.vars.outputs.reason }})_" >> README.md
+        git fetch origin                         # make sure remote heads are visible
+        git switch -C "${{ steps.vars.outputs.branch }}"
+
+        printf "\n\n_Last automated touch: %s  (%s)_" \
+               "$(date -u)" "${{ steps.vars.outputs.reason }}" >> README.md
+
         git add README.md
         git commit -m "chore: README timestamp – ${{ steps.vars.outputs.reason }}"
-        git push -u origin "${{ steps.vars.outputs.branch }}"
 
-    # ── NEW STEP: create the label if missing ──
+        # overwrite stale branch from a failed run, but safe if someone else changed it
+        git push --force-with-lease -u origin "${{ steps.vars.outputs.branch }}"
+
+    # 5. ensure the PR label exists
     - name: Ensure 'auto-pr' label exists
       env:
         GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       run: |
-        if ! gh label list | grep -q '^auto-pr'; then
-          gh label create auto-pr --color EEEEEE --description "Automated PRs" --force
-        fi
-    # ──────────────────────────────────────────
+        gh label list | grep -q '^auto-pr' || \
+        gh label create auto-pr --color EEEEEE --description "Automated PRs"
 
+    # 6. open the pull request
     - name: Open pull request
       env:
         GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       run: |
         gh pr create \
           --title "🤖 README refresh – ${{ steps.vars.outputs.reason }}" \
-          --body  "Automated PR created by the Pull-Shark bot." \
+          --body  "Automated PR generated for Pull-Shark badge farming." \
           --head  "${{ steps.vars.outputs.branch }}" \
           --base  ${{ github.ref_name }} \
           --label "auto-pr"
 
-    - name: Merge PR & delete branch
+    # 7. merge & delete branch
+    - name: Merge PR and clean up
       env:
         GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       run: |
-        PR_NUMBER=$(gh pr list --state open --head "${{ steps.vars.outputs.branch }}" \
-                    --json number -q '.[0].number')
-        gh pr merge "$PR_NUMBER" --squash \
-                                 --subject "chore: daily README bump" \
-                                 --delete-branch --admin
+        PR=$(gh pr list --state open --head "${{ steps.vars.outputs.branch }}" \
+               --json number -q '.[0].number')
+        gh pr merge "$PR" \
+            --squash \
+            --subject "chore: daily README bump" \
+            --delete-branch --admin
