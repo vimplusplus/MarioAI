@@ -1,0 +1,32 @@
+# ── Environment ────────────────────────────────────────────────────────────────
+env_name: "SuperMarioBros-v0"
+movement: "simple"    # Options: simple | right_only | complex
+n_stack: 4            # Number of frames to stack
+
+# ── Algorithm ──────────────────────────────────────────────────────────────────
+policy: "CnnPolicy"
+total_timesteps: 1000000
+
+# Learning rate — keep this LOW for visual RL tasks.
+# Too high → unstable training. Too low → very slow learning.
+# 1e-6 is a safe, well-tested starting point for Mario.
+learning_rate: 0.000001
+
+# Rollout buffer size per environment.
+# Larger = more stable gradient estimates, but more memory.
+n_steps: 512
+
+batch_size: 64
+n_epochs: 10
+gamma: 0.99           # Discount factor for future rewards
+gae_lambda: 0.95      # GAE smoothing (bias-variance tradeoff)
+clip_range: 0.2       # PPO clipping (prevents destructive policy updates)
+ent_coef: 0.01        # Entropy coefficient — encourages exploration
+
+# ── Paths ──────────────────────────────────────────────────────────────────────
+checkpoint_dir: "./train/"
+log_dir: "./logs/"
+checkpoint_freq: 10000   # Save a checkpoint every N environment steps
+
+# ── Resume (set to a checkpoint path to continue a previous run) ───────────────
+resume_path: null

@@ -1,0 +1,22 @@
+# ── Core game environment ─────────────────────────────────────────────────────
+# gym is pinned to 0.21.0 — newer versions break the NES render pipeline.
+gym==0.21.0
+gym-super-mario-bros==7.3.0
+nes-py
+
+# ── Deep learning ─────────────────────────────────────────────────────────────
+torch
+torchvision
+torchaudio
+
+# ── Reinforcement learning ────────────────────────────────────────────────────
+stable-baselines3[extra]
+
+# ── Configuration ─────────────────────────────────────────────────────────────
+pyyaml
+
+# ── CLI display (optional but recommended — beautiful terminal output) ─────────
+rich
+
+# ── Monitoring ────────────────────────────────────────────────────────────────
+tensorboard
