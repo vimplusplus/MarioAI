@@ -11,7 +11,7 @@
 
 <br/>
 
-<img src="MarioFront2025.webp" alt="Mario AI" width="600"/>
+<img src="assets/MarioFront2025.webp" alt="Mario AI" width="600"/>
 
 </div>
 
@@ -61,6 +61,12 @@ pip install -r requirements.txt
 
 ### 2. Train the agent
 
+**Option A — single-file quickstart** (great for getting started fast):
+```bash
+python quickstart.py train
+```
+
+**Option B — full CLI** (config files, resume support, rich output):
 ```bash
 python main.py train
 ```
@@ -214,8 +220,8 @@ mario-ai/
 │   └── test_environment.py    # Environment pipeline tests (mocked)
 ├── train/                     # Auto-created — model checkpoints (.zip)
 ├── logs/                      # Auto-created — TensorBoard event files
-├── MarioAIPy.ipynb            # Original exploratory notebook (preserved)
-├── main.py                    # CLI entry point
+├── quickstart.py              # Single-file walkthrough: demo / train / play
+├── main.py                    # Full CLI entry point
 ├── requirements.txt
 ├── pyproject.toml
 ├── Makefile
